@@ -184,11 +184,11 @@ const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, upda
               <div key={g.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div className="flex items-center gap-3">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${g.tipo === 'res' ? 'bg-primary/10 text-primary' :
-                      g.tipo === 'pollo' ? 'bg-gold/10 text-foreground' :
-                        g.tipo === 'salarios' ? 'bg-blue-500/10 text-blue-700' :
-                          g.tipo === 'arriendos' ? 'bg-purple-500/10 text-purple-700' :
-                            g.tipo === 'servicios' ? 'bg-orange-500/10 text-orange-700' :
-                              'bg-muted text-muted-foreground'
+                    g.tipo === 'pollo' ? 'bg-gold/10 text-foreground' :
+                      g.tipo === 'salarios' ? 'bg-blue-500/10 text-blue-700' :
+                        g.tipo === 'arriendos' ? 'bg-purple-500/10 text-purple-700' :
+                          g.tipo === 'servicios' ? 'bg-orange-500/10 text-orange-700' :
+                            'bg-muted text-muted-foreground'
                     }`}>{g.tipo}</span>
                   <span className="text-sm font-medium text-foreground">{g.nombre}</span>
                   <span className="text-xs text-muted-foreground capitalize">({g.fuente.replace(/_/g, ' ')})</span>
@@ -250,39 +250,7 @@ const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, upda
         <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">Resumen del Día</h3>
-            {cerrado && (
-              <button
-                onClick={() => setEditingVentaBruta(!editingVentaBruta)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-sm font-medium transition-colors"
-              >
-                <Edit className="w-4 h-4" />
-                {editingVentaBruta ? 'Cancelar' : 'Editar Venta Bruta'}
-              </button>
-            )}
           </div>
-
-          {editingVentaBruta && cerrado && (
-            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <label className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2 block">
-                Nueva Venta Bruta
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder={`Actual: ${fmt(summary.ventaBruta)}`}
-                  value={ventaBruta}
-                  onChange={e => setVentaBruta(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm"
-                />
-                <button
-                  onClick={handleUpdateVentaBruta}
-                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                >
-                  Actualizar
-                </button>
-              </div>
-            </div>
-          )}
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             {[
