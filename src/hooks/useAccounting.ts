@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { AccountingState, Gasto, Compra, Sede, TipoGasto, RegistroDiario } from '@/types/accounting';
 
@@ -358,6 +359,7 @@ export const useAccounting = () => {
 
     if (error) {
       console.error('Error adding compra:', error);
+      toast.error('Error al guardar el costo: ' + error.message);
       return;
     }
 
