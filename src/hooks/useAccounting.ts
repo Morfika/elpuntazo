@@ -125,6 +125,7 @@ export const useAccounting = () => {
           valor: Number(c.valor),
           peso: c.peso ? Number(c.peso) : undefined,
           descripcion: c.descripcion || undefined,
+          fuentePago: (c.fuente_pago as any) || 'caja_total',
         })),
       });
     } catch (error) {
@@ -350,6 +351,7 @@ export const useAccounting = () => {
         valor: compra.valor,
         peso: compra.peso,
         descripcion: compra.descripcion,
+        fuente_pago: compra.fuentePago,
       }])
       .select()
       .single();
@@ -359,10 +361,27 @@ export const useAccounting = () => {
       return;
     }
 
+    // Si se creó como pagada, descontar inmediatamente
+    if (compra.pagado && data) {
+      const updates: any = {};
+      const fuente = (data.fuente_pago as any) || 'caja_total'; // Fallback
+
+      if (fuente === 'ahorro') {
+        updates.ahorro = state.cajas.ahorro - data.valor;
+      } else {
+        updates.caja_total = state.cajas.cajaTotal - data.valor;
+      }
+
+      await supabase
+        .from('estado_cajas')
+        .update(updates)
+        .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+    }
+
     if (data) {
       await loadData();
     }
-  }, [loadData]);
+  }, [state, loadData]); // Added state dependency
 
   const markCompraPaid = useCallback(async (id: string, fechaPago: string) => {
     const compra = state.compras.find(c => c.id === id);
@@ -378,12 +397,17 @@ export const useAccounting = () => {
       return;
     }
 
-    // Actualizar caja total
+    // Actualizar caja correspondiente
+    const updates: any = {};
+    if (compra.fuentePago === 'ahorro') {
+      updates.ahorro = state.cajas.ahorro - compra.valor;
+    } else {
+      updates.caja_total = state.cajas.cajaTotal - compra.valor;
+    }
+
     const { error: cajasError } = await supabase
       .from('estado_cajas')
-      .update({
-        caja_total: state.cajas.cajaTotal - compra.valor,
-      })
+      .update(updates)
       .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
 
     if (cajasError) {
@@ -395,6 +419,23 @@ export const useAccounting = () => {
   }, [state, loadData]);
 
   const removeCompra = useCallback(async (id: string) => {
+    const compra = state.compras.find(c => c.id === id);
+
+    // Si estaba pagada, devolver el dinero
+    if (compra?.pagado) {
+      const updates: any = {};
+      if (compra.fuentePago === 'ahorro') {
+        updates.ahorro = state.cajas.ahorro + compra.valor;
+      } else {
+        updates.caja_total = state.cajas.cajaTotal + compra.valor;
+      }
+
+      await supabase
+        .from('estado_cajas')
+        .update(updates)
+        .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+    }
+
     const { error } = await supabase
       .from('compras')
       .delete()
@@ -406,7 +447,7 @@ export const useAccounting = () => {
     }
 
     await loadData();
-  }, [loadData]);
+  }, [state, loadData]);
 
   // ===== REPORTS =====
   const normalizeExpenseName = (name: string): string => {

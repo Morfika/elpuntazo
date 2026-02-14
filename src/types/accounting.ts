@@ -12,6 +12,8 @@ export interface Gasto {
   registro_diario_id?: string | null;
 }
 
+export type FuentePago = 'caja_total' | 'ahorro';
+
 export interface Compra {
   id: string;
   tipo: TipoGasto;
@@ -22,6 +24,7 @@ export interface Compra {
   valor: number;
   peso?: number;
   descripcion?: string;
+  fuentePago: FuentePago; // De dónde sale el dinero
 }
 
 export interface RegistroDiario {

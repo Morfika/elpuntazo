@@ -6,20 +6,20 @@ import Header from '@/components/Header';
 import CashOverview from '@/components/accounting/CashOverview';
 import DailyRegister from '@/components/accounting/DailyRegister';
 import PurchaseTracker from '@/components/accounting/PurchaseTracker';
-import ExpenseReport from '@/components/accounting/ExpenseReport';
+import IncomeStatement from '@/components/accounting/IncomeStatement';
 import LocationsManager from '@/components/admin/LocationsManager';
 import { DollarSign, ClipboardList, ShoppingCart, BarChart3, MapPin, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-type TabId = 'resumen' | 'registro' | 'compras' | 'gastos' | 'sedes';
+type TabId = 'resumen' | 'registro' | 'costos' | 'balance' | 'sedes';
 
-const tabs: { id: TabId; label: string; icon: typeof DollarSign }[] = [
+const tabs = [
   { id: 'resumen', label: 'Resumen', icon: DollarSign },
   { id: 'registro', label: 'Registro Diario', icon: ClipboardList },
-  { id: 'compras', label: 'Costos', icon: ShoppingCart },
-  { id: 'gastos', label: 'Gastos', icon: BarChart3 },
-  { id: 'sedes', label: 'Sedes', icon: MapPin },
-];
+  { id: 'costos', label: 'Gestor Costos', icon: ShoppingCart },
+  { id: 'balance', label: 'Estado Resultados', icon: BarChart3 },
+  // { id: 'sedes', label: 'Sedes', icon: MapPin },
+] as const;
 
 const AdminDashboard = () => {
   const { isAuthenticated, logout } = useAuth();
@@ -44,7 +44,7 @@ const AdminDashboard = () => {
             {tabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTab(tab.id as TabId)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${activeTab === tab.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -84,7 +84,7 @@ const AdminDashboard = () => {
               getDaySummary={accounting.getDaySummary}
             />
           )}
-          {activeTab === 'compras' && (
+          {activeTab === 'costos' && (
             <PurchaseTracker
               state={accounting.state}
               addCompra={accounting.addCompra}
@@ -94,11 +94,8 @@ const AdminDashboard = () => {
               getPurchaseTotals={accounting.getPurchaseTotals}
             />
           )}
-          {activeTab === 'gastos' && (
-            <ExpenseReport
-              state={accounting.state}
-              getGroupedExpenses={accounting.getGroupedExpenses}
-            />
+          {activeTab === 'balance' && (
+            <IncomeStatement state={accounting.state} />
           )}
           {activeTab === 'sedes' && (
             <LocationsManager

@@ -42,6 +42,7 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
       valor: Number(valor),
       peso: peso ? Number(peso) : undefined,
       descripcion: descripcion.trim() || undefined,
+      fuentePago: (tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios') ? 'ahorro' : 'caja_total',
     });
     setProveedor('');
     setValor('');
@@ -108,33 +109,75 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
 
       {/* Add form */}
       {showForm && (
-        <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
+        <div className="bg-card rounded-2xl p-5 shadow-card border border-border mt-4">
           <h3 className="font-semibold text-foreground mb-4">Nuevo Costo</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <select value={tipo} onChange={e => setTipo(e.target.value as TipoGasto)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm">
-              <option value="res">Res</option>
-              <option value="pollo">Pollo</option>
-              <option value="general">General</option>
-              <option value="salarios">Salarios</option>
-              <option value="arriendos">Arriendos</option>
-              <option value="servicios">Servicios</option>
-            </select>
-            <input placeholder="Proveedor" value={proveedor} onChange={e => setProveedor(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
-            <input type="date" value={fechaCompra} onChange={e => setFechaCompra(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
-            <input type="number" placeholder="Valor ($)" value={valor} onChange={e => setValor(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
-            <input type="number" placeholder="Peso (kg, opcional)" value={peso} onChange={e => setPeso(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
-            <input placeholder="Descripción (opcional)" value={descripcion} onChange={e => setDescripcion(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Tipo de Gasto</label>
+              <select value={tipo} onChange={e => setTipo(e.target.value as TipoGasto)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm">
+                <option value="res">Res</option>
+                <option value="pollo">Pollo</option>
+                <option value="general">General</option>
+                <option value="salarios">Salarios</option>
+                <option value="arriendos">Arriendos</option>
+                <option value="servicios">Servicios</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Proveedor</label>
+              <input placeholder="Nombre proveedor" value={proveedor} onChange={e => setProveedor(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Fecha Compra</label>
+              <input type="date" value={fechaCompra} onChange={e => setFechaCompra(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Valor ($)</label>
+              <input type="number" placeholder="0" value={valor} onChange={e => setValor(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Fuente de Pago</label>
+              <select
+                value={tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios' ? 'ahorro' : 'caja_total'}
+                disabled
+                className="w-full px-3 py-2 rounded-lg border border-input bg-muted text-muted-foreground text-sm cursor-not-allowed"
+              >
+                <option value="caja_total">Caja Total (Operativo)</option>
+                <option value="ahorro">Ahorro (Administrativo)</option>
+              </select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                {tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios'
+                  ? 'Se paga del Ahorro acumulado'
+                  : 'Se resta de la Caja Total del día'}
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Peso (kg) - Opcional</label>
+              <input type="number" placeholder="0" value={peso} onChange={e => setPeso(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="text-xs text-muted-foreground mb-1 block">Descripción (Opcional)</label>
+              <input placeholder="Detalles adicionales..." value={descripcion} onChange={e => setDescripcion(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
+            </div>
           </div>
-          <button onClick={handleAdd}
-            className="mt-3 px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-            Registrar Costo
-          </button>
+          <div className="flex justify-end mt-4">
+            <button onClick={handleAdd}
+              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+              Registrar Costo
+            </button>
+          </div>
         </div>
       )}
 
@@ -148,14 +191,13 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
             {filtered.sort((a, b) => b.fechaCompra.localeCompare(a.fechaCompra)).map(c => (
               <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-3 border-b border-border last:border-0">
                 <div className="flex items-center gap-3">
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    c.tipo === 'res' ? 'bg-primary/10 text-primary' :
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.tipo === 'res' ? 'bg-primary/10 text-primary' :
                     c.tipo === 'pollo' ? 'bg-gold/10 text-foreground' :
-                    c.tipo === 'salarios' ? 'bg-blue-500/10 text-blue-700' :
-                    c.tipo === 'arriendos' ? 'bg-purple-500/10 text-purple-700' :
-                    c.tipo === 'servicios' ? 'bg-orange-500/10 text-orange-700' :
-                    'bg-muted text-muted-foreground'
-                  }`}>{c.tipo}</span>
+                      c.tipo === 'salarios' ? 'bg-blue-500/10 text-blue-700' :
+                        c.tipo === 'arriendos' ? 'bg-purple-500/10 text-purple-700' :
+                          c.tipo === 'servicios' ? 'bg-orange-500/10 text-orange-700' :
+                            'bg-muted text-muted-foreground'
+                    }`}>{c.tipo}</span>
                   <div>
                     <span className="text-sm font-medium text-foreground">{c.proveedor}</span>
                     <span className="text-xs text-muted-foreground ml-2">{c.fechaCompra}</span>
