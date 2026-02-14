@@ -163,7 +163,7 @@ const IncomeStatement = ({ state }: IncomeStatementProps) => {
                                                     {expandedRows[row.date] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                 </td>
                                                 <td className="px-6 py-4 font-medium text-foreground whitespace-nowrap">
-                                                    {new Date(row.date).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                                    {new Date(row.date + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' })}
                                                     <span className="text-xs text-muted-foreground block font-normal">{row.date}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right font-medium text-success">
