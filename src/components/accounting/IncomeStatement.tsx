@@ -28,7 +28,7 @@ const IncomeStatement = ({ state }: IncomeStatementProps) => {
         state.registros.forEach(r => dates.add(r.fecha));
         state.compras.forEach(c => dates.add(c.fechaCompra));
 
-        const sortedDates = Array.from(dates).sort((a, b) => b.localeCompare(a));
+        const sortedDates = Array.from(dates).sort((a, b) => a.localeCompare(b));
 
         return sortedDates.map(date => {
             const registro = state.registros.find(r => r.fecha === date);
