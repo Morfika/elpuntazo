@@ -502,6 +502,64 @@ export const useAccounting = () => {
     await loadData();
   }, [state, loadData]);
 
+  const updateCompra = useCallback(async (id: string, updates: Partial<Compra>) => {
+    const oldCompra = state.compras.find(c => c.id === id);
+    if (!oldCompra) return;
+
+    const newCompra = { ...oldCompra, ...updates };
+
+    // Si estaba pagada y cambió valor o fuente, ajustar cajas
+    if (oldCompra.pagado) {
+      const oldFuente = oldCompra.fuentePago || 'caja_total';
+      const newFuente = newCompra.fuentePago || 'caja_total';
+
+      if (oldCompra.valor !== newCompra.valor || oldFuente !== newFuente) {
+        let { cajaTotal, ahorro } = state.cajas;
+
+        // 1. Revertir antiguo
+        if (oldFuente === 'ahorro') ahorro += oldCompra.valor;
+        else cajaTotal += oldCompra.valor;
+
+        // 2. Aplicar nuevo
+        if (newFuente === 'ahorro') ahorro -= newCompra.valor;
+        else cajaTotal -= newCompra.valor;
+
+        // Guardar cambios en caja
+        const { error: cajaError } = await supabase
+          .from('estado_cajas')
+          .update({ caja_total: cajaTotal, ahorro })
+          .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
+
+        if (cajaError) {
+          toast.error('Error actualizando cajas: ' + cajaError.message);
+          return;
+        }
+      }
+    }
+
+    // Actualizar compra
+    const { error } = await supabase
+      .from('compras')
+      .update({
+        tipo: newCompra.tipo,
+        proveedor: newCompra.proveedor,
+        fecha_compra: newCompra.fechaCompra,
+        valor: newCompra.valor,
+        peso: newCompra.peso,
+        descripcion: newCompra.descripcion,
+        fuente_pago: newCompra.fuentePago,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Error actualizando costo: ' + error.message);
+      return;
+    }
+
+    toast.success('Costo actualizado correctamente');
+    await loadData();
+  }, [state, loadData]);
+
   // ===== REPORTS =====
   const normalizeExpenseName = (name: string): string => {
     return name.toLowerCase().trim().replace(/s$/, '').replace(/\s+grande.*$/, '').replace(/\s+/g, ' ');
@@ -574,7 +632,7 @@ export const useAccounting = () => {
   }, [state.registros]);
 
   const updateCajas = useCallback(async (updates: Partial<AccountingState['cajas']>) => {
-    const cajasId = (await supabase.from('estado_cajas').select('id').single()).data?.id;
+    const cajasId = (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id;
     if (!cajasId) return;
 
     const dbUpdates: any = {};
@@ -601,7 +659,7 @@ export const useAccounting = () => {
     loading,
     addSede, updateSede, removeSede,
     addGasto, removeGasto, closeDay, reopenDay, updateDayVentaBruta,
-    addCompra, markCompraPaid, removeCompra,
+    addCompra, markCompraPaid, removeCompra, updateCompra,
     getGroupedExpenses, getPurchasesByType, getPurchaseTotals, getDaySummary,
     updateCajas,
   };

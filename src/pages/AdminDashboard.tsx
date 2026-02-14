@@ -88,6 +88,7 @@ const AdminDashboard = () => {
             <PurchaseTracker
               state={accounting.state}
               addCompra={accounting.addCompra}
+              updateCompra={accounting.updateCompra}
               markCompraPaid={accounting.markCompraPaid}
               removeCompra={accounting.removeCompra}
               getPurchasesByType={accounting.getPurchasesByType}

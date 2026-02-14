@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Check, Trash2 } from 'lucide-react';
+import { Plus, Check, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import type { AccountingState, TipoGasto, Compra } from '@/types/accounting';
@@ -9,17 +9,19 @@ const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', c
 interface Props {
   state: AccountingState;
   addCompra: (compra: Omit<Compra, 'id'>) => void;
+  updateCompra: (id: string, updates: Partial<Compra>) => void;
   markCompraPaid: (id: string, fechaPago: string) => void;
   removeCompra: (id: string) => void;
   getPurchasesByType: (tipo?: TipoGasto, start?: string, end?: string) => Compra[];
   getPurchaseTotals: (tipo?: TipoGasto, start?: string, end?: string) => { total: number; pagado: number; pendiente: number; count: number };
 }
 
-const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPurchasesByType, getPurchaseTotals }: Props) => {
+const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, removeCompra, getPurchasesByType, getPurchaseTotals }: Props) => {
   const [filterType, setFilterType] = useState<TipoGasto | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form fields
   const [tipo, setTipo] = useState<TipoGasto>('res');
@@ -32,24 +34,54 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
   const filtered = getPurchasesByType(filterType || undefined, startDate || undefined, endDate || undefined);
   const totals = getPurchaseTotals(filterType || undefined, startDate || undefined, endDate || undefined);
 
-  const handleAdd = () => {
-    if (!proveedor.trim() || !valor) return;
-    addCompra({
-      tipo,
-      proveedor: proveedor.trim(),
-      fechaCompra,
-      pagado: false,
-      valor: Number(valor),
-      peso: peso ? Number(peso) : undefined,
-      descripcion: descripcion.trim() || undefined,
-      fuentePago: (tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios') ? 'ahorro' : 'caja_total',
-    });
+  const resetForm = () => {
     setProveedor('');
     setValor('');
     setPeso('');
     setDescripcion('');
+    setEditingId(null);
+    setTipo('res');
+    setFechaCompra(new Date().toISOString().split('T')[0]);
     setShowForm(false);
-    toast.success('Compra registrada');
+  };
+
+  const handleEdit = (compra: Compra) => {
+    setEditingId(compra.id);
+    setTipo(compra.tipo);
+    setProveedor(compra.proveedor);
+    setFechaCompra(compra.fechaCompra);
+    setValor(compra.valor.toString());
+    setPeso(compra.peso?.toString() || '');
+    setDescripcion(compra.descripcion || '');
+    setShowForm(true);
+  };
+
+  const handleSave = () => {
+    if (!proveedor.trim() || !valor) {
+      toast.error('Complete los campos obligatorios');
+      return;
+    }
+
+    const compraData = {
+      tipo,
+      proveedor: proveedor.trim(),
+      fechaCompra,
+      valor: Number(valor),
+      peso: peso ? Number(peso) : undefined,
+      descripcion: descripcion.trim() || undefined,
+      fuentePago: (tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios') ? 'ahorro' : 'caja_total' as any,
+    };
+
+    if (editingId) {
+      updateCompra(editingId, compraData);
+    } else {
+      addCompra({
+        ...compraData,
+        pagado: false, // Default for new
+      });
+    }
+
+    resetForm();
   };
 
   const handlePay = (id: string) => {
@@ -110,7 +142,7 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
       {/* Add form */}
       {showForm && (
         <div className="bg-card rounded-2xl p-5 shadow-card border border-border mt-4">
-          <h3 className="font-semibold text-foreground mb-4">Nuevo Costo</h3>
+          <h3 className="font-semibold text-foreground mb-4">{editingId ? 'Editar Costo' : 'Nuevo Costo'}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Tipo de Gasto</label>
@@ -172,10 +204,14 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
                 className="w-full px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm" />
             </div>
           </div>
-          <div className="flex justify-end mt-4">
-            <button onClick={handleAdd}
+          <div className="flex justify-end mt-4 gap-2">
+            <button onClick={resetForm}
+              className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium hover:bg-muted/80 transition-colors">
+              Cancelar
+            </button>
+            <button onClick={handleSave}
               className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-              Registrar Costo
+              {editingId ? 'Actualizar Costo' : 'Registrar Costo'}
             </button>
           </div>
         </div>
@@ -189,8 +225,8 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
         ) : (
           <div className="space-y-2">
             {filtered.sort((a, b) => b.fechaCompra.localeCompare(a.fechaCompra)).map(c => (
-              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-3 border-b border-border last:border-0">
-                <div className="flex items-center gap-3">
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-3 border-b border-border last:border-0 hover:bg-muted/10 px-2 rounded-lg transition-colors group">
+                <div className="flex items-center gap-3 cursor-pointer flex-1" onClick={() => handleEdit(c)}>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.tipo === 'res' ? 'bg-primary/10 text-primary' :
                     c.tipo === 'pollo' ? 'bg-gold/10 text-foreground' :
                       c.tipo === 'salarios' ? 'bg-blue-500/10 text-blue-700' :
@@ -199,26 +235,39 @@ const PurchaseTracker = ({ state, addCompra, markCompraPaid, removeCompra, getPu
                             'bg-muted text-muted-foreground'
                     }`}>{c.tipo}</span>
                   <div>
-                    <span className="text-sm font-medium text-foreground">{c.proveedor}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{c.fechaCompra}</span>
-                    {c.peso && <span className="text-xs text-muted-foreground ml-2">{c.peso}kg</span>}
+                    <span className="text-sm font-medium text-foreground block">{c.proveedor}</span>
+                    <div className="flex gap-2 text-xs text-muted-foreground">
+                      <span>{c.fechaCompra}</span>
+                      {c.peso && <span>• {c.peso}kg</span>}
+                      {c.descripcion && <span>• {c.descripcion}</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-bold text-foreground">{fmt(c.valor)}</span>
                   {c.pagado ? (
-                    <span className="flex items-center gap-1 text-xs text-success font-medium">
-                      <Check className="w-3 h-3" /> Pagado {c.fechaPago}
+                    <span className="bg-success/10 text-success px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Pagado {c.fechaPago?.slice(5)}
                     </span>
                   ) : (
                     <button onClick={() => handlePay(c.id)}
-                      className="px-3 py-1 rounded text-xs font-medium bg-success/10 text-success hover:bg-success/20 transition-colors">
+                      className="px-3 py-1 rounded text-xs font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors">
                       Marcar Pagado
                     </button>
                   )}
+
+                  {/* Edit Button */}
+                  <button
+                    onClick={() => handleEdit(c)}
+                    className="text-primary/70 hover:text-primary p-2 rounded-full hover:bg-primary/10 transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+
                   <ConfirmDialog
                     trigger={
-                      <button className="text-destructive/60 hover:text-destructive">
+                      <button className="text-destructive/60 hover:text-destructive p-2 rounded-full hover:bg-destructive/10 transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     }
