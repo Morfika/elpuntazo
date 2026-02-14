@@ -49,6 +49,7 @@ export const useAccounting = () => {
       const { data: cajasData } = await supabase
         .from('estado_cajas')
         .select('*')
+        .limit(1)
         .single();
 
       // Cargar sedes
@@ -299,7 +300,7 @@ export const useAccounting = () => {
         caja_registradora: CAJA_REGISTRADORA_TARGET,
         ahorro: state.cajas.ahorro + AHORRO_DIARIO,
       })
-      .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+      .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
 
     if (cajasError) {
       console.error('Error updating cajas:', cajasError);
@@ -408,7 +409,7 @@ export const useAccounting = () => {
       await supabase
         .from('estado_cajas')
         .update(updates)
-        .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+        .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
     }
 
     if (data) {
@@ -441,7 +442,7 @@ export const useAccounting = () => {
     const { error: cajasError } = await supabase
       .from('estado_cajas')
       .update(updates)
-      .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+      .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
 
     if (cajasError) {
       console.error('Error updating cajas:', cajasError);
@@ -466,7 +467,7 @@ export const useAccounting = () => {
       await supabase
         .from('estado_cajas')
         .update(updates)
-        .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+        .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
     }
 
     const { error } = await supabase
