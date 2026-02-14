@@ -311,6 +311,35 @@ export const useAccounting = () => {
 
   // Nueva función para reabrir un día
   const reopenDay = useCallback(async (fecha: string) => {
+    const record = state.registros.find(r => r.fecha === fecha);
+    if (!record || !record.cerrado) return;
+
+    // Calcular valores a revertir (Misma lógica que closeDay)
+    const gastos = record.gastos || [];
+    const gastosCajaMenor = gastos.filter(g => g.fuente === 'caja_menor').reduce((sum, g) => sum + g.monto, 0);
+    const gastosCajaTotal = gastos.filter(g => g.fuente === 'caja_total').reduce((sum, g) => sum + g.monto, 0);
+    const gastosRegistradora = gastos.filter(g => g.fuente === 'caja_registradora').reduce((sum, g) => sum + g.monto, 0);
+
+    // Nota: Usamos la misma lógica corregida de venta neta
+    const ventaNeta = record.ventaBruta - gastosCajaMenor - gastosRegistradora;
+    const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
+
+    // 1. Revertir saldo en cajas
+    const { error: cajaError } = await supabase
+      .from('estado_cajas')
+      .update({
+        caja_total: state.cajas.cajaTotal + gastosCajaTotal - aporteCajaTotal,
+        ahorro: state.cajas.ahorro - AHORRO_DIARIO,
+      })
+      .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+
+    if (cajaError) {
+      console.error('Error reverting cajas:', cajaError);
+      toast.error('Error al revertir saldos de caja: ' + cajaError.message);
+      return;
+    }
+
+    // 2. Marcar día como abierto
     const { error } = await supabase
       .from('registros_diarios')
       .update({ cerrado: false })
@@ -318,11 +347,13 @@ export const useAccounting = () => {
 
     if (error) {
       console.error('Error reopening day:', error);
+      toast.error('Error al reabrir el día');
       return;
     }
 
     await loadData();
-  }, [loadData]);
+    toast.success('Día reabierto y saldos revertidos correctamente');
+  }, [state, loadData]);
 
   // Nueva función para actualizar venta bruta
   const updateDayVentaBruta = useCallback(async (fecha: string, ventaBruta: number) => {
