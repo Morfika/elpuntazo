@@ -46,11 +46,30 @@ export const useAccounting = () => {
       setLoading(true);
 
       // Cargar estado de cajas
-      const { data: cajasData } = await supabase
+      let { data: cajasData } = await supabase
         .from('estado_cajas')
         .select('*')
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      // Si no existe, crear uno por defecto (Auto-healing)
+      if (!cajasData) {
+        const { data: newCajas, error: createError } = await supabase
+          .from('estado_cajas')
+          .insert([{
+            caja_total: 0,
+            caja_menor: CAJA_MENOR_TARGET,
+            caja_registradora: CAJA_REGISTRADORA_TARGET,
+            ahorro: 0,
+          }])
+          .select()
+          .single();
+
+        if (!createError && newCajas) {
+          cajasData = newCajas;
+          toast.success('Se restauró el estado de cajas automáticamente');
+        }
+      }
 
       // Cargar sedes
       const { data: sedesData } = await supabase

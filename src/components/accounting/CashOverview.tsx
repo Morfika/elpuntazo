@@ -71,24 +71,49 @@ const CashOverview = ({ state }: Props) => {
       )}
 
       {/* Recent closed days */}
+      {/* Recent closed days */}
       {registros.filter(r => r.cerrado).length > 0 && (
-        <div className="bg-card rounded-2xl p-5 shadow-card border border-border">
-          <h3 className="font-semibold text-foreground mb-3">Últimos cierres</h3>
-          <div className="space-y-2">
-            {registros.filter(r => r.cerrado).slice(-5).reverse().map(r => {
-              const gastosCM = r.gastos.filter(g => g.fuente === 'caja_menor').reduce((s, g) => s + g.monto, 0);
-              const gastosReg = r.gastos.filter(g => g.fuente === 'caja_registradora').reduce((s, g) => s + g.monto, 0);
-              const ventaNeta = r.ventaBruta - CAJA_REGISTRADORA_TARGET - gastosCM - gastosReg;
-              return (
-                <div key={r.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
-                  <span className="text-muted-foreground">{r.fecha}</span>
-                  <div className="text-right">
-                    <span className="font-medium text-foreground">{fmt(r.ventaBruta)}</span>
-                    <span className="text-xs text-success ml-2">Neta: {fmt(ventaNeta)}</span>
-                  </div>
-                </div>
-              );
-            })}
+        <div className="bg-card rounded-2xl p-5 shadow-card border border-border overflow-hidden">
+          <h3 className="font-semibold text-foreground mb-4">Últimos cierres</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 rounded-l-lg">Fecha</th>
+                  <th className="px-4 py-3 text-right">
+                    Venta Bruta
+                    <span className="block text-[10px] normal-case opacity-70">Sin restar gastos</span>
+                  </th>
+                  <th className="px-4 py-3 text-right">
+                    Venta Neta
+                    <span className="block text-[10px] normal-case opacity-70">Menos gastos del día</span>
+                  </th>
+                  <th className="px-4 py-3 text-right rounded-r-lg">
+                    Aporte Caja Total
+                    <span className="block text-[10px] normal-case opacity-70">Menos $200k ahorro</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {registros.filter(r => r.cerrado).slice(-5).reverse().map(r => {
+                  const gastosCM = r.gastos.filter(g => g.fuente === 'caja_menor').reduce((s, g) => s + g.monto, 0);
+                  const gastosReg = r.gastos.filter(g => g.fuente === 'caja_registradora').reduce((s, g) => s + g.monto, 0);
+
+                  // Corrección: NO restar base de registradora
+                  const ventaNeta = r.ventaBruta - gastosCM - gastosReg;
+                  const aporte = ventaNeta - AHORRO_DIARIO;
+
+                  return (
+                    <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-medium">{r.fecha}</td>
+                      <td className="px-4 py-3 text-right text-foreground">{fmt(r.ventaBruta)}</td>
+                      <td className="px-4 py-3 text-right text-foreground font-medium">{fmt(ventaNeta)}</td>
+                      <td className="px-4 py-3 text-right text-primary font-bold">{fmt(aporte)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
