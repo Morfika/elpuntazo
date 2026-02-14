@@ -17,6 +17,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   confirmLabel?: string;
   cancelLabel?: string;
+  variant?: 'destructive' | 'default';
 }
 
 const ConfirmDialog = ({
@@ -26,6 +27,7 @@ const ConfirmDialog = ({
   onConfirm,
   confirmLabel = 'Eliminar',
   cancelLabel = 'Cancelar',
+  variant = 'destructive',
 }: ConfirmDialogProps) => (
   <AlertDialog>
     <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
@@ -38,7 +40,10 @@ const ConfirmDialog = ({
         <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
         <AlertDialogAction
           onClick={onConfirm}
-          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          className={variant === 'destructive'
+            ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            : "bg-primary text-primary-foreground hover:bg-primary/90"
+          }
         >
           {confirmLabel}
         </AlertDialogAction>

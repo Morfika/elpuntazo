@@ -102,6 +102,8 @@ const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, upda
                 }
                 title="¿Reabrir este día?"
                 description="Esto te permitirá editar los gastos y la venta bruta. Podrás volver a cerrarlo después."
+                confirmLabel="Reabrir"
+                variant="default"
                 onConfirm={handleReopenDay}
               />
             </div>
