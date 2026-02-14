@@ -4,7 +4,7 @@ import type { AccountingState, Gasto, Compra, Sede, TipoGasto, RegistroDiario } 
 
 export const CAJA_MENOR_TARGET = 200000;
 export const CAJA_REGISTRADORA_TARGET = 200000;
-export const AHORRO_DIARIO = 100000;
+export const AHORRO_DIARIO = 200000;
 
 export const defaultSedes: Sede[] = [
   {
