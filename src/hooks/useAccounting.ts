@@ -272,7 +272,7 @@ export const useAccounting = () => {
       .filter(g => g.fuente === 'caja_registradora')
       .reduce((sum, g) => sum + g.monto, 0);
 
-    const ventaNeta = ventaBruta - CAJA_REGISTRADORA_TARGET - gastosCajaMenor - gastosRegistradora;
+    const ventaNeta = ventaBruta - gastosCajaMenor - gastosRegistradora;
     const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
 
     // Actualizar o crear registro diario
@@ -502,7 +502,10 @@ export const useAccounting = () => {
     const gastosCajaMenor = record.gastos.filter(g => g.fuente === 'caja_menor').reduce((s, g) => s + g.monto, 0);
     const gastosCajaTotal = record.gastos.filter(g => g.fuente === 'caja_total').reduce((s, g) => s + g.monto, 0);
     const gastosRegistradora = record.gastos.filter(g => g.fuente === 'caja_registradora').reduce((s, g) => s + g.monto, 0);
-    const ventaNeta = record.ventaBruta - CAJA_REGISTRADORA_TARGET - gastosCajaMenor - gastosRegistradora;
+
+    // NO restar CAJA_REGISTRADORA_TARGET (el usuario ya ingresa la venta neta de base)
+    const ventaNeta = record.ventaBruta - gastosCajaMenor - gastosRegistradora;
+
     return {
       ventaBruta: record.ventaBruta,
       ventaNeta,
