@@ -21,9 +21,7 @@ const Header = () => {
       <div className="container mx-auto px-6 flex items-center justify-between h-16">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-extrabold text-lg">P</span>
-          </div>
+          <img src="/ico.svg" alt="El Puntazo" className="w-10 h-10" />
           <div className="flex flex-col leading-tight">
             <span className="font-bold text-foreground text-lg tracking-tight">El Puntazo</span>
             <span className="text-[10px] text-muted-foreground font-medium tracking-widest uppercase">Expendio de Carnes</span>
@@ -37,8 +35,8 @@ const Header = () => {
               key={link.to}
               to={link.to}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${isActive(link.to)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                 }`}
             >
               {link.label}
@@ -71,8 +69,8 @@ const Header = () => {
                   to={link.to}
                   onClick={() => setMobileOpen(false)}
                   className={`px-4 py-3 rounded-lg text-sm font-medium transition-all ${isActive(link.to)
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                     }`}
                 >
                   {link.label}

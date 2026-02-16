@@ -27,15 +27,13 @@ const Hero = () => {
             transition={{ delay: 0.2 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary-foreground/10 backdrop-blur-sm border border-primary-foreground/20 mb-8">
 
-            <span className="w-2 h-2 rounded-full bg-accent animate-pulse-warm" />
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse-warm" />
             <span className="text-primary-foreground/90 text-sm font-medium">Calidad y frescura garantizada</span>
           </motion.div>
 
           {/* Logo/Title */}
-          <div className="mb-2">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary-foreground/15 backdrop-blur-sm border-2 border-primary-foreground/30 mb-6">
-              <span className="text-primary-foreground font-black text-3xl">P</span>
-            </div>
+          <div className="mb-6">
+            <img src="/logoelpuntazo.svg" alt="El Puntazo Logo" className="w-32 h-32 mx-auto" />
           </div>
           <h1 className="text-5xl md:text-7xl font-black text-primary-foreground mb-4 tracking-tight">
             El Puntazo

@@ -26,8 +26,8 @@ const Footer = () => (
         <div>
           <h4 className="font-semibold mb-3 text-sm uppercase tracking-wider text-primary-foreground/80">Contacto</h4>
           <div className="flex flex-col gap-2 text-sm text-primary-foreground/60">
-            <span>📞 300 123 4567</span>
-            <span>📍 Centro y Norte</span>
+            <span>📞 313 463 4084</span>
+            <span>📍 Chipaque Centro</span>
           </div>
         </div>
       </div>

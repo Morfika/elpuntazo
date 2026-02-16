@@ -73,9 +73,9 @@ const Index = () => {
         <div className="container mx-auto px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl mx-auto">
             {[
-              { num: '10+', label: 'Años de experiencia' },
-              { num: '50+', label: 'Cortes disponibles' },
-              { num: '2', label: 'Sedes' },
+              { num: '13+', label: 'Años de experiencia' },
+              { num: '40+', label: 'Cortes disponibles' },
+              { num: '1', label: 'Sedes' },
               { num: '100%', label: 'Frescura garantizada' },
             ].map((stat, i) => (
               <motion.div
