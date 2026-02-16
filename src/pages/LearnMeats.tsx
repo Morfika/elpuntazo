@@ -66,18 +66,18 @@ const LearnMeats = () => {
         </motion.div>
 
         {/* Animal tabs */}
-        <div className="flex justify-center gap-4 mb-10">
+        <div className="flex justify-center gap-2 sm:gap-4 mb-10 px-2">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`flex items-center gap-3 px-6 py-3 rounded-full text-base font-semibold transition-all duration-200 border ${active === tab.id
+              className={`flex items-center gap-1.5 sm:gap-3 px-3 sm:px-6 py-2 sm:py-3 rounded-full text-sm sm:text-base font-semibold transition-all duration-200 border ${active === tab.id
                 ? 'bg-primary text-white border-primary shadow-lg scale-105'
                 : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50 hover:bg-gray-50'
                 }`}
             >
               <span className="text-current opacity-90">{tab.icon}</span>
-              {tab.label}
+              <span className="whitespace-nowrap">{tab.label}</span>
             </button>
           ))}
         </div>
