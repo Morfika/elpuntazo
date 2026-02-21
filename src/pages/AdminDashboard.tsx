@@ -72,7 +72,7 @@ const AdminDashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'resumen' && <CashOverview state={accounting.state} />}
+          {activeTab === 'resumen' && <CashOverview state={accounting.state} reconciliarCajas={accounting.reconciliarCajas} />}
           {activeTab === 'registro' && (
             <DailyRegister
               state={accounting.state}
@@ -81,6 +81,7 @@ const AdminDashboard = () => {
               closeDay={accounting.closeDay}
               reopenDay={accounting.reopenDay}
               updateDayVentaBruta={accounting.updateDayVentaBruta}
+              deleteDay={accounting.deleteDay}
               getDaySummary={accounting.getDaySummary}
             />
           )}
@@ -90,6 +91,7 @@ const AdminDashboard = () => {
               addCompra={accounting.addCompra}
               updateCompra={accounting.updateCompra}
               markCompraPaid={accounting.markCompraPaid}
+              unmarkCompraPaid={accounting.unmarkCompraPaid}
               removeCompra={accounting.removeCompra}
               getPurchasesByType={accounting.getPurchasesByType}
               getPurchaseTotals={accounting.getPurchaseTotals}

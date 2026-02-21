@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Check, Trash2, Pencil } from 'lucide-react';
+import { Plus, Check, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmDialog from '@/components/ui/confirm-dialog';
 import type { AccountingState, TipoGasto, Compra } from '@/types/accounting';
+import { getLocalDateString } from '@/lib/utils';
 
 const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 
@@ -11,22 +12,26 @@ interface Props {
   addCompra: (compra: Omit<Compra, 'id'>) => void;
   updateCompra: (id: string, updates: Partial<Compra>) => void;
   markCompraPaid: (id: string, fechaPago: string) => void;
+  unmarkCompraPaid: (id: string) => void;
   removeCompra: (id: string) => void;
   getPurchasesByType: (tipo?: TipoGasto, start?: string, end?: string) => Compra[];
   getPurchaseTotals: (tipo?: TipoGasto, start?: string, end?: string) => { total: number; pagado: number; pendiente: number; count: number };
 }
 
-const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, removeCompra, getPurchasesByType, getPurchaseTotals }: Props) => {
+const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, unmarkCompraPaid, removeCompra, getPurchasesByType, getPurchaseTotals }: Props) => {
   const [filterType, setFilterType] = useState<TipoGasto | ''>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadingPayId, setLoadingPayId] = useState<string | null>(null);
+  const [loadingUnpayId, setLoadingUnpayId] = useState<string | null>(null);
 
   // Form fields
   const [tipo, setTipo] = useState<TipoGasto>('res');
   const [proveedor, setProveedor] = useState('');
-  const [fechaCompra, setFechaCompra] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaCompra, setFechaCompra] = useState(getLocalDateString());
   const [valor, setValor] = useState('');
   const [peso, setPeso] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -41,7 +46,7 @@ const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, remov
     setDescripcion('');
     setEditingId(null);
     setTipo('res');
-    setFechaCompra(new Date().toISOString().split('T')[0]);
+    setFechaCompra(getLocalDateString());
     setShowForm(false);
   };
 
@@ -56,7 +61,7 @@ const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, remov
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!proveedor.trim() || !valor) {
       toast.error('Complete los campos obligatorios');
       return;
@@ -72,22 +77,34 @@ const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, remov
       fuentePago: (tipo === 'salarios' || tipo === 'arriendos' || tipo === 'servicios') ? 'ahorro' : 'caja_total' as any,
     };
 
+    setIsSaving(true);
+    // Cerrar formulario de inmediato (el optimistic update ya muestra el item)
+    resetForm();
+
     if (editingId) {
-      updateCompra(editingId, compraData);
+      await updateCompra(editingId, compraData);
     } else {
-      addCompra({
+      await addCompra({
         ...compraData,
-        pagado: false, // Default for new
+        pagado: false,
       });
     }
-
-    resetForm();
+    setIsSaving(false);
   };
 
-  const handlePay = (id: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    markCompraPaid(id, today);
-    toast.success('Compra marcada como pagada');
+  const handlePay = async (id: string) => {
+    setLoadingPayId(id);
+    const today = getLocalDateString();
+    await markCompraPaid(id, today);
+    setLoadingPayId(null);
+    toast.success('Costo marcado como pagado');
+  };
+
+  const handleUnpay = async (id: string) => {
+    setLoadingUnpayId(id);
+    await unmarkCompraPaid(id);
+    setLoadingUnpayId(null);
+    toast.success('Pago desmarcado correctamente');
   };
 
   return (
@@ -209,8 +226,9 @@ const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, remov
               className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium hover:bg-muted/80 transition-colors">
               Cancelar
             </button>
-            <button onClick={handleSave}
-              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+            <button onClick={handleSave} disabled={isSaving}
+              className="flex items-center gap-2 px-6 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-70">
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingId ? 'Actualizar Costo' : 'Registrar Costo'}
             </button>
           </div>
@@ -246,12 +264,35 @@ const PurchaseTracker = ({ state, addCompra, updateCompra, markCompraPaid, remov
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-bold text-foreground">{fmt(c.valor)}</span>
                   {c.pagado ? (
-                    <span className="bg-success/10 text-success px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Pagado {c.fechaPago?.slice(5)}
-                    </span>
+                    <ConfirmDialog
+                      trigger={
+                        <button
+                          disabled={loadingUnpayId === c.id}
+                          className="bg-success/10 text-success px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                          title="Click para desmarcar pago"
+                        >
+                          {loadingUnpayId === c.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <Check className="w-3 h-3" />}
+                          Pagado {c.fechaPago?.slice(5)}
+                        </button>
+                      }
+                      title="¿Desmarcar pago?"
+                      description={`¿Seguro que quieres desmarcar el pago de "${c.proveedor}" por ${fmt(c.valor)}? El valor volverá a la caja correspondiente.`}
+                      confirmLabel="Sí, desmarcar"
+                      cancelLabel="No"
+                      variant="default"
+                      onConfirm={() => handleUnpay(c.id)}
+                    />
                   ) : (
-                    <button onClick={() => handlePay(c.id)}
-                      className="px-3 py-1 rounded text-xs font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors">
+                    <button
+                      onClick={() => handlePay(c.id)}
+                      disabled={loadingPayId === c.id}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {loadingPayId === c.id
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <Check className="w-3 h-3" />}
                       Marcar Pagado
                     </button>
                   )}

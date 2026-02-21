@@ -4,6 +4,7 @@ import ConfirmDialog from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import type { AccountingState, FuenteGasto, TipoGasto } from '@/types/accounting';
 import { CAJA_REGISTRADORA_TARGET, AHORRO_DIARIO } from '@/hooks/useAccounting';
+import { getLocalDateString } from '@/lib/utils';
 
 const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 
@@ -14,11 +15,12 @@ interface Props {
   closeDay: (fecha: string, ventaBruta: number) => void;
   reopenDay: (fecha: string) => void;
   updateDayVentaBruta: (fecha: string, ventaBruta: number) => void;
+  deleteDay: (fecha: string) => void;
   getDaySummary: (fecha: string) => any;
 }
 
-const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, updateDayVentaBruta, getDaySummary }: Props) => {
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, updateDayVentaBruta, deleteDay, getDaySummary }: Props) => {
+  const [fecha, setFecha] = useState(getLocalDateString());
   const [nombre, setNombre] = useState('');
   const [monto, setMonto] = useState('');
   const [fuente, setFuente] = useState<FuenteGasto>('caja_menor');
@@ -55,6 +57,10 @@ const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, upda
   };
 
   const handleReopenDay = () => {
+    // Autocompletar con la venta bruta ya registrada
+    if (record?.ventaBruta) {
+      setVentaBruta(record.ventaBruta.toString());
+    }
     reopenDay(fecha);
     toast.success('Día reabierto - Ahora puedes editarlo');
   };
@@ -105,6 +111,19 @@ const DailyRegister = ({ state, addGasto, removeGasto, closeDay, reopenDay, upda
                 confirmLabel="Reabrir"
                 variant="default"
                 onConfirm={handleReopenDay}
+              />
+              <ConfirmDialog
+                trigger={
+                  <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 text-sm font-medium transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                    Cancelar cierre
+                  </button>
+                }
+                title="¿Eliminar este registro?"
+                description={`Esto eliminará completamente el registro del ${fecha}, incluyendo todos los gastos. Los saldos de caja serán revertidos. Esta acción no se puede deshacer.`}
+                confirmLabel="Eliminar registro"
+                variant="destructive"
+                onConfirm={() => deleteDay(fecha)}
               />
             </div>
           )}

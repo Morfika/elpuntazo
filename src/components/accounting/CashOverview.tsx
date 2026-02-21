@@ -1,19 +1,22 @@
 import { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Calendar, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { AccountingState } from '@/types/accounting';
 import { CAJA_MENOR_TARGET, CAJA_REGISTRADORA_TARGET, AHORRO_DIARIO } from '@/hooks/useAccounting';
+import { getLocalDateString } from '@/lib/utils';
+import ConfirmDialog from '@/components/ui/confirm-dialog';
 
 interface Props {
   state: AccountingState;
+  reconciliarCajas: () => void;
 }
 
 const fmt = (n: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 
-const CashOverview = ({ state }: Props) => {
+const CashOverview = ({ state, reconciliarCajas }: Props) => {
   const { cajas, registros } = state;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   const todayRecord = registros.find(r => r.fecha === todayStr);
   const todayGastos = todayRecord?.gastos || [];
   const pendingTotal = todayGastos.reduce((s, g) => s + g.monto, 0);
@@ -27,6 +30,24 @@ const CashOverview = ({ state }: Props) => {
 
   return (
     <div className="space-y-6">
+      {/* Header con botón de recalcular */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-foreground">Estado de Cajas</h2>
+        <ConfirmDialog
+          trigger={
+            <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-medium transition-colors">
+              <RefreshCw className="w-3.5 h-3.5" />
+              Recalcular cajas
+            </button>
+          }
+          title="¿Recalcular saldos de cajas?"
+          description="Esto recalcula los saldos desde cero basándose en los días cerrados y los costos pagados. Únicamente úsalo si los saldos muestran valores incorrectos."
+          confirmLabel="Recalcular"
+          variant="default"
+          onConfirm={reconciliarCajas}
+        />
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {boxes.map((box, i) => (
           <motion.div
@@ -40,7 +61,9 @@ const CashOverview = ({ state }: Props) => {
               <box.icon className="w-5 h-5" />
             </div>
             <p className="text-sm text-muted-foreground font-medium mb-1">{box.label}</p>
-            <p className="text-xl font-bold text-foreground">{fmt(box.value)}</p>
+            <p className={`text-xl font-bold ${box.value < 0 ? 'text-destructive' : 'text-foreground'}`}>
+              {fmt(box.value)}
+            </p>
             {box.target !== undefined && box.value < box.target && (
               <p className="text-xs text-destructive mt-1">Faltan {fmt(box.target - box.value)}</p>
             )}

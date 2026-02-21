@@ -40,6 +40,95 @@ export const useAccounting = () => {
   });
   const [loading, setLoading] = useState(true);
 
+  // Helper: obtiene el ID de estado_cajas SIEMPRE desde el servidor (evita stale state)
+  const getCajasId = async (): Promise<string | null> => {
+    const { data, error } = await supabase
+      .from('estado_cajas')
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) {
+      console.error('getCajasId failed:', error);
+      return null;
+    }
+    return data.id;
+  };
+
+  // Helper: lee los valores actuales de cajas DESDE EL SERVIDOR en el momento del ajuste
+  // Evita race conditions al usar state.cajas que puede estar desactualizado
+  const adjustCajas = async (delta: {
+    caja_total?: number;
+    ahorro?: number;
+    caja_menor?: number;
+    caja_registradora?: number;
+  }): Promise<boolean> => {
+    const cajasId = await getCajasId();
+    if (!cajasId) {
+      toast.error('Error: no se encontró el registro de cajas');
+      return false;
+    }
+
+    // Leer valores actuales del servidor (no del estado React)
+    const { data: current, error: readError } = await supabase
+      .from('estado_cajas')
+      .select('caja_total, ahorro, caja_menor, caja_registradora')
+      .eq('id', cajasId)
+      .single();
+
+    if (readError || !current) {
+      toast.error('Error al leer cajas: ' + readError?.message);
+      return false;
+    }
+
+    const updates: Record<string, number> = {};
+    if (delta.caja_total !== undefined) updates.caja_total = Number(current.caja_total) + delta.caja_total;
+    if (delta.ahorro !== undefined) updates.ahorro = Number(current.ahorro) + delta.ahorro;
+    if (delta.caja_menor !== undefined) updates.caja_menor = Number(current.caja_menor) + delta.caja_menor;
+    if (delta.caja_registradora !== undefined) updates.caja_registradora = Number(current.caja_registradora) + delta.caja_registradora;
+
+    const { error: updateError } = await supabase
+      .from('estado_cajas')
+      .update(updates)
+      .eq('id', cajasId);
+
+    if (updateError) {
+      toast.error('Error al actualizar cajas: ' + updateError.message);
+      return false;
+    }
+    return true;
+  };
+
+  // Helper: establece valores absolutos en cajas (para cierre/reapertura de día)
+  const setCajas = async (values: {
+    caja_total?: number;
+    ahorro?: number;
+    caja_menor?: number;
+    caja_registradora?: number;
+  }): Promise<boolean> => {
+    const cajasId = await getCajasId();
+    if (!cajasId) {
+      toast.error('Error: no se encontró el registro de cajas');
+      return false;
+    }
+
+    const updates: Record<string, number> = {};
+    if (values.caja_total !== undefined) updates.caja_total = values.caja_total;
+    if (values.ahorro !== undefined) updates.ahorro = values.ahorro;
+    if (values.caja_menor !== undefined) updates.caja_menor = values.caja_menor;
+    if (values.caja_registradora !== undefined) updates.caja_registradora = values.caja_registradora;
+
+    const { error } = await supabase
+      .from('estado_cajas')
+      .update(updates)
+      .eq('id', cajasId);
+
+    if (error) {
+      toast.error('Error al actualizar cajas: ' + error.message);
+      return false;
+    }
+    return true;
+  };
+
   // Cargar datos iniciales
   const loadData = useCallback(async () => {
     try {
@@ -224,7 +313,33 @@ export const useAccounting = () => {
 
   // ===== DAILY RECORDS =====
   const addGasto = useCallback(async (fecha: string, gasto: Omit<Gasto, 'id' | 'fecha'>) => {
-    // Primero asegurar que existe el registro diario
+    // ⬆️ OPTIMISTIC UPDATE: mostrar el gasto de inmediato con ID temporal
+    const tempId = `temp-${Date.now()}`;
+    const gastoOptimista: Gasto = { ...gasto, id: tempId, fecha };
+    setState(prev => {
+      const existingReg = prev.registros.find(r => r.fecha === fecha);
+      if (existingReg) {
+        return {
+          ...prev,
+          registros: prev.registros.map(r =>
+            r.fecha === fecha ? { ...r, gastos: [...r.gastos, gastoOptimista] } : r
+          ),
+        };
+      }
+      // Si no existe el registro, crearlo optimistamente
+      return {
+        ...prev,
+        registros: [...prev.registros, {
+          id: tempId,
+          fecha,
+          ventaBruta: 0,
+          cerrado: false,
+          gastos: [gastoOptimista],
+        }],
+      };
+    });
+
+    // Asegurar que existe el registro diario en la BD
     let { data: registro } = await supabase
       .from('registros_diarios')
       .select('id')
@@ -240,7 +355,6 @@ export const useAccounting = () => {
       registro = newRegistro;
     }
 
-    // Insertar el gasto
     const { data: newGasto, error } = await supabase
       .from('gastos')
       .insert([{
@@ -257,15 +371,32 @@ export const useAccounting = () => {
 
     if (error) {
       console.error('Error adding gasto:', error);
+      await loadData(); // Revertir estado optimista
       return;
     }
 
+    // Reemplazar ID temporal con el real
     if (newGasto) {
-      await loadData();
+      setState(prev => ({
+        ...prev,
+        registros: prev.registros.map(r =>
+          r.fecha === fecha
+            ? { ...r, gastos: r.gastos.map(g => g.id === tempId ? { ...g, id: newGasto.id } : g) }
+            : r
+        ),
+      }));
     }
   }, [loadData]);
 
   const removeGasto = useCallback(async (fecha: string, gastoId: string) => {
+    // ⬆️ OPTIMISTIC UPDATE
+    setState(prev => ({
+      ...prev,
+      registros: prev.registros.map(r =>
+        r.fecha === fecha ? { ...r, gastos: r.gastos.filter(g => g.id !== gastoId) } : r
+      ),
+    }));
+
     const { error } = await supabase
       .from('gastos')
       .delete()
@@ -273,25 +404,17 @@ export const useAccounting = () => {
 
     if (error) {
       console.error('Error removing gasto:', error);
-      return;
+      await loadData(); // Revertir
     }
-
-    await loadData();
   }, [loadData]);
 
   const closeDay = useCallback(async (fecha: string, ventaBruta: number) => {
     const record = state.registros.find(r => r.fecha === fecha);
     const gastos = record?.gastos || [];
 
-    const gastosCajaMenor = gastos
-      .filter(g => g.fuente === 'caja_menor')
-      .reduce((sum, g) => sum + g.monto, 0);
-    const gastosCajaTotal = gastos
-      .filter(g => g.fuente === 'caja_total')
-      .reduce((sum, g) => sum + g.monto, 0);
-    const gastosRegistradora = gastos
-      .filter(g => g.fuente === 'caja_registradora')
-      .reduce((sum, g) => sum + g.monto, 0);
+    const gastosCajaMenor = gastos.filter(g => g.fuente === 'caja_menor').reduce((sum, g) => sum + g.monto, 0);
+    const gastosCajaTotal = gastos.filter(g => g.fuente === 'caja_total').reduce((sum, g) => sum + g.monto, 0);
+    const gastosRegistradora = gastos.filter(g => g.fuente === 'caja_registradora').reduce((sum, g) => sum + g.monto, 0);
 
     const ventaNeta = ventaBruta - gastosCajaMenor - gastosRegistradora;
     const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
@@ -299,31 +422,31 @@ export const useAccounting = () => {
     // Actualizar o crear registro diario
     const { error: registroError } = await supabase
       .from('registros_diarios')
-      .upsert([{
-        fecha,
-        venta_bruta: ventaBruta,
-        cerrado: true,
-      }], { onConflict: 'fecha' });
+      .upsert([{ fecha, venta_bruta: ventaBruta, cerrado: true }], { onConflict: 'fecha' });
 
     if (registroError) {
       console.error('Error closing day:', registroError);
+      toast.error('Error al cerrar el día: ' + registroError.message);
       return;
     }
 
-    // Actualizar estado de cajas
-    const { error: cajasError } = await supabase
-      .from('estado_cajas')
-      .update({
-        caja_total: state.cajas.cajaTotal - gastosCajaTotal + aporteCajaTotal,
-        caja_menor: CAJA_MENOR_TARGET,
-        caja_registradora: CAJA_REGISTRADORA_TARGET,
-        ahorro: state.cajas.ahorro + AHORRO_DIARIO,
-      })
-      .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
+    // Ajustar cajas usando deltas (lee valores actuales del servidor)
+    // aporteCajaTotal entra a caja_total, menos gastosCajaTotal que ya se pagaron
+    const ok = await adjustCajas({
+      caja_total: aporteCajaTotal - gastosCajaTotal,
+      ahorro: AHORRO_DIARIO,
+      // Restaurar caja_menor y registradora a su target (los gastos del día las vaciaron)
+      // Usamos setCajas para estos valores absolutos
+    });
+    if (!ok) return;
 
-    if (cajasError) {
-      console.error('Error updating cajas:', cajasError);
-      return;
+    // Resetear caja_menor y registradora a targets absolutos
+    const cajasId = await getCajasId();
+    if (cajasId) {
+      await supabase
+        .from('estado_cajas')
+        .update({ caja_menor: CAJA_MENOR_TARGET, caja_registradora: CAJA_REGISTRADORA_TARGET })
+        .eq('id', cajasId);
     }
 
     await loadData();
@@ -334,45 +457,69 @@ export const useAccounting = () => {
     const record = state.registros.find(r => r.fecha === fecha);
     if (!record || !record.cerrado) return;
 
-    // Calcular valores a revertir (Misma lógica que closeDay)
     const gastos = record.gastos || [];
     const gastosCajaMenor = gastos.filter(g => g.fuente === 'caja_menor').reduce((sum, g) => sum + g.monto, 0);
     const gastosCajaTotal = gastos.filter(g => g.fuente === 'caja_total').reduce((sum, g) => sum + g.monto, 0);
     const gastosRegistradora = gastos.filter(g => g.fuente === 'caja_registradora').reduce((sum, g) => sum + g.monto, 0);
-
-    // Nota: Usamos la misma lógica corregida de venta neta
     const ventaNeta = record.ventaBruta - gastosCajaMenor - gastosRegistradora;
     const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
 
-    // 1. Revertir saldo en cajas
-    const { error: cajaError } = await supabase
-      .from('estado_cajas')
-      .update({
-        caja_total: state.cajas.cajaTotal + gastosCajaTotal - aporteCajaTotal,
-        ahorro: state.cajas.ahorro - AHORRO_DIARIO,
-      })
-      .eq('id', (await supabase.from('estado_cajas').select('id').single()).data?.id || '');
+    // Revertir: usar deltas inversos (leer desde servidor)
+    const ok = await adjustCajas({
+      caja_total: -(aporteCajaTotal - gastosCajaTotal),
+      ahorro: -AHORRO_DIARIO,
+    });
+    if (!ok) return;
 
-    if (cajaError) {
-      console.error('Error reverting cajas:', cajaError);
-      toast.error('Error al revertir saldos de caja: ' + cajaError.message);
-      return;
-    }
-
-    // 2. Marcar día como abierto
+    // Marcar día como abierto
     const { error } = await supabase
       .from('registros_diarios')
       .update({ cerrado: false })
       .eq('fecha', fecha);
 
     if (error) {
-      console.error('Error reopening day:', error);
-      toast.error('Error al reabrir el día');
+      toast.error('Error al reabrir el día: ' + error.message);
       return;
     }
 
     await loadData();
     toast.success('Día reabierto y saldos revertidos correctamente');
+  }, [state, loadData]);
+
+  // Eliminar completamente un registro diario (y revertir cajas si estaba cerrado)
+  const deleteDay = useCallback(async (fecha: string) => {
+    const record = state.registros.find(r => r.fecha === fecha);
+    if (!record) return;
+
+    if (record.cerrado) {
+      const gastos = record.gastos || [];
+      const gastosCajaMenor = gastos.filter(g => g.fuente === 'caja_menor').reduce((sum, g) => sum + g.monto, 0);
+      const gastosCajaTotal = gastos.filter(g => g.fuente === 'caja_total').reduce((sum, g) => sum + g.monto, 0);
+      const gastosRegistradora = gastos.filter(g => g.fuente === 'caja_registradora').reduce((sum, g) => sum + g.monto, 0);
+      const ventaNeta = record.ventaBruta - gastosCajaMenor - gastosRegistradora;
+      const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
+
+      const ok = await adjustCajas({
+        caja_total: -(aporteCajaTotal - gastosCajaTotal),
+        ahorro: -AHORRO_DIARIO,
+      });
+      if (!ok) return;
+    }
+
+    await supabase.from('gastos').delete().eq('fecha', fecha);
+
+    const { error } = await supabase
+      .from('registros_diarios')
+      .delete()
+      .eq('fecha', fecha);
+
+    if (error) {
+      toast.error('Error al eliminar el registro: ' + error.message);
+      return;
+    }
+
+    await loadData();
+    toast.success('Registro del día eliminado correctamente');
   }, [state, loadData]);
 
   // Nueva función para actualizar venta bruta
@@ -392,6 +539,21 @@ export const useAccounting = () => {
 
   // ===== PURCHASES =====
   const addCompra = useCallback(async (compra: Omit<Compra, 'id'>) => {
+    // ⬆️ OPTIMISTIC UPDATE con ID temporal
+    const tempId = `temp-${Date.now()}`;
+    setState(prev => ({
+      ...prev,
+      compras: [{ ...compra, id: tempId }, ...prev.compras],
+      cajas: compra.pagado
+        ? {
+          ...prev.cajas,
+          ...(compra.fuentePago === 'ahorro'
+            ? { ahorro: prev.cajas.ahorro - compra.valor }
+            : { cajaTotal: prev.cajas.cajaTotal - compra.valor }),
+        }
+        : prev.cajas,
+    }));
+
     const { data, error } = await supabase
       .from('compras')
       .insert([{
@@ -408,99 +570,134 @@ export const useAccounting = () => {
       .select()
       .single();
 
-    if (error) {
-      console.error('Error adding compra:', error);
-      toast.error('Error al guardar el costo: ' + error.message);
+    if (error || !data) {
+      toast.error('Error al guardar el costo: ' + error?.message);
+      await loadData(); // Revertir estado optimista
       return;
     }
 
-    // Si se creó como pagada, descontar inmediatamente
-    if (compra.pagado && data) {
-      const updates: any = {};
-      const fuente = (data.fuente_pago as any) || 'caja_total'; // Fallback
+    // Reemplazar ID temporal con el real
+    setState(prev => ({
+      ...prev,
+      compras: prev.compras.map(c => c.id === tempId ? { ...c, id: data.id } : c),
+    }));
 
-      if (fuente === 'ahorro') {
-        updates.ahorro = state.cajas.ahorro - data.valor;
-      } else {
-        updates.caja_total = state.cajas.cajaTotal - data.valor;
-      }
-
-      await supabase
-        .from('estado_cajas')
-        .update(updates)
-        .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
+    // Si fue creada como pagada, ajustar cajas en el servidor
+    if (compra.pagado) {
+      const fuente = compra.fuentePago || 'caja_total';
+      await adjustCajas(
+        fuente === 'ahorro' ? { ahorro: -data.valor } : { caja_total: -data.valor }
+      );
     }
-
-    if (data) {
-      await loadData();
-    }
-  }, [state, loadData]); // Added state dependency
+  }, [loadData]);
 
   const markCompraPaid = useCallback(async (id: string, fechaPago: string) => {
     const compra = state.compras.find(c => c.id === id);
     if (!compra || compra.pagado) return;
 
+    // ⬆️ OPTIMISTIC UPDATE: marcar como pagada y descontar de caja al instante
+    setState(prev => ({
+      ...prev,
+      compras: prev.compras.map(c => c.id === id ? { ...c, pagado: true, fechaPago } : c),
+      cajas: {
+        ...prev.cajas,
+        ...(compra.fuentePago === 'ahorro'
+          ? { ahorro: prev.cajas.ahorro - compra.valor }
+          : { cajaTotal: prev.cajas.cajaTotal - compra.valor }),
+      },
+    }));
+
+    // Escritura en servidor en segundo plano
     const { error: compraError } = await supabase
       .from('compras')
       .update({ pagado: true, fecha_pago: fechaPago })
       .eq('id', id);
 
     if (compraError) {
-      console.error('Error marking compra as paid:', compraError);
+      toast.error('Error al marcar como pagado: ' + compraError.message);
+      await loadData(); // Revertir
       return;
     }
 
-    // Actualizar caja correspondiente
-    const updates: any = {};
-    if (compra.fuentePago === 'ahorro') {
-      updates.ahorro = state.cajas.ahorro - compra.valor;
-    } else {
-      updates.caja_total = state.cajas.cajaTotal - compra.valor;
+    const fuente = compra.fuentePago || 'caja_total';
+    const ok = await adjustCajas(
+      fuente === 'ahorro' ? { ahorro: -compra.valor } : { caja_total: -compra.valor }
+    );
+    if (!ok) {
+      await supabase.from('compras').update({ pagado: false, fecha_pago: null }).eq('id', id);
+      await loadData();
     }
+  }, [state.compras, loadData]);
 
-    const { error: cajasError } = await supabase
-      .from('estado_cajas')
-      .update(updates)
-      .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
+  const unmarkCompraPaid = useCallback(async (id: string) => {
+    const compra = state.compras.find(c => c.id === id);
+    if (!compra || !compra.pagado) return;
 
-    if (cajasError) {
-      console.error('Error updating cajas:', cajasError);
+    // ⬆️ OPTIMISTIC UPDATE: revertir pago al instante
+    setState(prev => ({
+      ...prev,
+      compras: prev.compras.map(c => c.id === id ? { ...c, pagado: false, fechaPago: undefined } : c),
+      cajas: {
+        ...prev.cajas,
+        ...(compra.fuentePago === 'ahorro'
+          ? { ahorro: prev.cajas.ahorro + compra.valor }
+          : { cajaTotal: prev.cajas.cajaTotal + compra.valor }),
+      },
+    }));
+
+    // Actualizar en BD
+    const { error } = await supabase
+      .from('compras')
+      .update({ pagado: false, fecha_pago: null })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Error al desmarcar el pago: ' + error.message);
+      await loadData(); // Revertir
       return;
     }
 
-    await loadData();
-  }, [state, loadData]);
+    // Devolver el valor a la caja en el servidor
+    const fuente = compra.fuentePago || 'caja_total';
+    const ok = await adjustCajas(
+      fuente === 'ahorro' ? { ahorro: compra.valor } : { caja_total: compra.valor }
+    );
+    if (!ok) {
+      await supabase.from('compras').update({ pagado: true, fecha_pago: compra.fechaPago }).eq('id', id);
+      await loadData();
+    }
+  }, [state.compras, loadData]);
 
   const removeCompra = useCallback(async (id: string) => {
     const compra = state.compras.find(c => c.id === id);
 
-    // Si estaba pagada, devolver el dinero
+    // ⬆️ OPTIMISTIC UPDATE: quitar de la lista y devolver a caja si estaba pagada
+    setState(prev => ({
+      ...prev,
+      compras: prev.compras.filter(c => c.id !== id),
+      cajas: compra?.pagado
+        ? {
+          ...prev.cajas,
+          ...(compra.fuentePago === 'ahorro'
+            ? { ahorro: prev.cajas.ahorro + compra.valor }
+            : { cajaTotal: prev.cajas.cajaTotal + compra.valor }),
+        }
+        : prev.cajas,
+    }));
+
     if (compra?.pagado) {
-      const updates: any = {};
-      if (compra.fuentePago === 'ahorro') {
-        updates.ahorro = state.cajas.ahorro + compra.valor;
-      } else {
-        updates.caja_total = state.cajas.cajaTotal + compra.valor;
-      }
-
-      await supabase
-        .from('estado_cajas')
-        .update(updates)
-        .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
+      const fuente = compra.fuentePago || 'caja_total';
+      await adjustCajas(
+        fuente === 'ahorro' ? { ahorro: compra.valor } : { caja_total: compra.valor }
+      );
     }
 
-    const { error } = await supabase
-      .from('compras')
-      .delete()
-      .eq('id', id);
-
+    const { error } = await supabase.from('compras').delete().eq('id', id);
     if (error) {
-      console.error('Error removing compra:', error);
-      return;
+      toast.error('Error al eliminar costo: ' + error.message);
+      await loadData(); // Revertir
     }
-
-    await loadData();
-  }, [state, loadData]);
+  }, [state.compras, loadData]);
 
   const updateCompra = useCallback(async (id: string, updates: Partial<Compra>) => {
     const oldCompra = state.compras.find(c => c.id === id);
@@ -508,36 +705,19 @@ export const useAccounting = () => {
 
     const newCompra = { ...oldCompra, ...updates };
 
-    // Si estaba pagada y cambió valor o fuente, ajustar cajas
+    // Si estaba pagada y cambió valor o fuente, ajustar cajas con deltas
     if (oldCompra.pagado) {
       const oldFuente = oldCompra.fuentePago || 'caja_total';
       const newFuente = newCompra.fuentePago || 'caja_total';
 
       if (oldCompra.valor !== newCompra.valor || oldFuente !== newFuente) {
-        let { cajaTotal, ahorro } = state.cajas;
-
-        // 1. Revertir antiguo
-        if (oldFuente === 'ahorro') ahorro += oldCompra.valor;
-        else cajaTotal += oldCompra.valor;
-
-        // 2. Aplicar nuevo
-        if (newFuente === 'ahorro') ahorro -= newCompra.valor;
-        else cajaTotal -= newCompra.valor;
-
-        // Guardar cambios en caja
-        const { error: cajaError } = await supabase
-          .from('estado_cajas')
-          .update({ caja_total: cajaTotal, ahorro })
-          .eq('id', (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id || '');
-
-        if (cajaError) {
-          toast.error('Error actualizando cajas: ' + cajaError.message);
-          return;
-        }
+        // Revertir antiguo
+        await adjustCajas(oldFuente === 'ahorro' ? { ahorro: oldCompra.valor } : { caja_total: oldCompra.valor });
+        // Aplicar nuevo
+        await adjustCajas(newFuente === 'ahorro' ? { ahorro: -newCompra.valor } : { caja_total: -newCompra.valor });
       }
     }
 
-    // Actualizar compra
     const { error } = await supabase
       .from('compras')
       .update({
@@ -558,7 +738,7 @@ export const useAccounting = () => {
 
     toast.success('Costo actualizado correctamente');
     await loadData();
-  }, [state, loadData]);
+  }, [state.compras, loadData]);
 
   // ===== REPORTS =====
   const normalizeExpenseName = (name: string): string => {
@@ -632,35 +812,74 @@ export const useAccounting = () => {
   }, [state.registros]);
 
   const updateCajas = useCallback(async (updates: Partial<AccountingState['cajas']>) => {
-    const cajasId = (await supabase.from('estado_cajas').select('id').limit(1).single()).data?.id;
-    if (!cajasId) return;
+    const ok = await setCajas({
+      caja_total: updates.cajaTotal,
+      caja_menor: updates.cajaMenor,
+      caja_registradora: updates.cajaRegistradora,
+      ahorro: updates.ahorro,
+    });
+    if (ok) await loadData();
+  }, [loadData]);
 
-    const dbUpdates: any = {};
-    if (updates.cajaTotal !== undefined) dbUpdates.caja_total = updates.cajaTotal;
-    if (updates.cajaMenor !== undefined) dbUpdates.caja_menor = updates.cajaMenor;
-    if (updates.cajaRegistradora !== undefined) dbUpdates.caja_registradora = updates.cajaRegistradora;
-    if (updates.ahorro !== undefined) dbUpdates.ahorro = updates.ahorro;
+  /**
+   * Recalcula los saldos de cajas desde cero usando los datos reales.
+   * Fórmula correcta:
+   *   caja_total = Σ(aportes de días cerrados) - Σ(compras pagadas fuente=caja_total)
+   *   ahorro     = Σ(ahorro diario de días cerrados) - Σ(compras pagadas fuente=ahorro)
+   *   caja_menor y registradora = siempre CAJA_MENOR_TARGET / CAJA_REGISTRADORA_TARGET
+   */
+  const reconciliarCajas = useCallback(async () => {
+    const registros = state.registros;
+    const compras = state.compras;
 
-    const { error } = await supabase
-      .from('estado_cajas')
-      .update(dbUpdates)
-      .eq('id', cajasId);
+    // Contribución de cada día cerrado a caja_total y ahorro
+    let cajaTotalCalculado = 0;
+    let ahorroCalculado = 0;
 
-    if (error) {
-      console.error('Error updating cajas:', error);
-      return;
+    for (const reg of registros.filter(r => r.cerrado)) {
+      const gastosCajaMenor = reg.gastos.filter(g => g.fuente === 'caja_menor').reduce((s, g) => s + g.monto, 0);
+      const gastosCajaTotal = reg.gastos.filter(g => g.fuente === 'caja_total').reduce((s, g) => s + g.monto, 0);
+      const gastosRegistradora = reg.gastos.filter(g => g.fuente === 'caja_registradora').reduce((s, g) => s + g.monto, 0);
+
+      const ventaNeta = reg.ventaBruta - gastosCajaMenor - gastosRegistradora;
+      const aporteCajaTotal = ventaNeta - AHORRO_DIARIO;
+
+      // aporteCajaTotal va a caja; gastosCajaTotal fueron gastados DE caja ese día
+      cajaTotalCalculado += aporteCajaTotal - gastosCajaTotal;
+      ahorroCalculado += AHORRO_DIARIO;
     }
 
-    await loadData();
-  }, [loadData]);
+    // Restar compras pagadas de cada fuente
+    for (const c of compras.filter(c => c.pagado)) {
+      if (c.fuentePago === 'ahorro') {
+        ahorroCalculado -= c.valor;
+      } else {
+        cajaTotalCalculado -= c.valor;
+      }
+    }
+
+    const ok = await setCajas({
+      caja_total: cajaTotalCalculado,
+      ahorro: ahorroCalculado,
+      caja_menor: CAJA_MENOR_TARGET,
+      caja_registradora: CAJA_REGISTRADORA_TARGET,
+    });
+
+    if (ok) {
+      await loadData();
+      toast.success(
+        `Cajas recalculadas — Caja Total: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(cajaTotalCalculado)}`
+      );
+    }
+  }, [state, loadData]);
 
   return {
     state,
     loading,
     addSede, updateSede, removeSede,
-    addGasto, removeGasto, closeDay, reopenDay, updateDayVentaBruta,
-    addCompra, markCompraPaid, removeCompra, updateCompra,
+    addGasto, removeGasto, closeDay, reopenDay, updateDayVentaBruta, deleteDay,
+    addCompra, markCompraPaid, unmarkCompraPaid, removeCompra, updateCompra,
     getGroupedExpenses, getPurchasesByType, getPurchaseTotals, getDaySummary,
-    updateCajas,
+    updateCajas, reconciliarCajas,
   };
 };
