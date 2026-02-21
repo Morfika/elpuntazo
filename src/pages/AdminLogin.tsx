@@ -69,10 +69,7 @@ const AdminLogin = () => {
               </button>
             </form>
 
-            <div className="mt-6 p-3 rounded-lg bg-muted text-center">
-              <p className="text-xs text-muted-foreground">Contraseña temporal:</p>
-              <p className="text-sm font-mono font-bold text-foreground mt-1">puntazo2024</p>
-            </div>
+
           </div>
         </motion.div>
       </div>

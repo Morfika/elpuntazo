@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
-const ADMIN_PASSWORD = 'puntazo2024';
+const ADMIN_PASSWORD = 'elpuntazo123*';
 
 interface AuthContextType {
   isAuthenticated: boolean;
